@@ -3,21 +3,38 @@ package main
 // Connect, subscribe on channel, publish into channel, read presence and history info.
 
 import (
+	"flag"
 	"fmt"
 	"log"
 	"time"
 
 	"github.com/centrifugal/centrifuge-go"
 	"github.com/centrifugal/centrifugo/libcentrifugo/auth"
-	"flag"
+	"sync/atomic"
 )
 
-func main() {
-	secretPtr := flag.String("secret", "", "Secret.")
-	urlPtr := flag.String("url", "", "WS URL, e.g.: ws://localhost:8000/connection/websocket.")
-	channelPtr := flag.String("channel", "test", "Channel name.")
-	flag.Parse()
+type config struct {
+	secret       string
+	wsUrl        string
+	channelName  string
+	clientsCount uint
 
+}
+
+var Config config
+
+var msgReceived int32 = 0
+
+func parseFlags () {
+	flag.StringVar(&Config.secret, "secret", "", "Secret.")
+	flag.StringVar(&Config.wsUrl, "url", "", "WS URL, e.g.: ws://localhost:8000/connection/websocket.")
+	flag.StringVar(&Config.channelName, "channel", "test", "Channel name.")
+	flag.UintVar(&Config.clientsCount, "clients", 1, "Clients count.")
+
+	flag.Parse()
+}
+
+func credentials() *centrifuge.Credentials {
 	// Application user ID.
 	user := "42"
 
@@ -28,68 +45,87 @@ func main() {
 	info := ""
 
 	// Generate client token so Centrifugo server can trust connection parameters received from client.
-	token := auth.GenerateClientToken(*secretPtr, user, timestamp, info)
+	token := auth.GenerateClientToken(Config.secret, user, timestamp, info)
 
-	creds := &centrifuge.Credentials{
+	return &centrifuge.Credentials{
 		User:      user,
 		Timestamp: timestamp,
 		Info:      info,
 		Token:     token,
 	}
+}
 
-	started := time.Now()
+func newConnection() {
+	creds := credentials()
+
+	events := &centrifuge.EventHandler{
+		OnDisconnect: func(c centrifuge.Centrifuge) error {
+			log.Println("Disconnected")
+			err := c.Reconnect(centrifuge.DefaultBackoffReconnect)
+			if err != nil {
+				log.Fatalln(fmt.Sprintf("Failed to reconnect: %s", err.Error()))
+			} else {
+				log.Println("Reconnected")
+			}
+			return nil
+		},
+	}
 
 	conf := centrifuge.DefaultConfig
 	conf.Timeout = 10 * time.Second
-	c := centrifuge.NewCentrifuge(*urlPtr, creds, nil, conf)
-	defer c.Close()
+
+	c := centrifuge.NewCentrifuge(Config.wsUrl, creds, events, conf)
 
 	err := c.Connect()
 	if err != nil {
-		log.Fatalln(err)
+		log.Fatalln(fmt.Sprintf("Failed to connect: %s", err.Error()))
 	}
 
 	onMessage := func(sub centrifuge.Sub, msg centrifuge.Message) error {
-		log.Println(fmt.Sprintf("New message received in channel %s: %#v", sub.Channel(), msg))
+		//log.Println(fmt.Sprintf("New message received in channel %s: %#v", Config.channelName, msg))
+		atomic.AddInt32(&msgReceived, 1)
 		return nil
 	}
 
-	onJoin := func(sub centrifuge.Sub, msg centrifuge.ClientInfo) error {
-		log.Println(fmt.Sprintf("User %s joined channel %s with client ID %s", msg.User, sub.Channel(), msg.Client))
-		return nil
-	}
-
-	onLeave := func(sub centrifuge.Sub, msg centrifuge.ClientInfo) error {
-		log.Println(fmt.Sprintf("User %s with clientID left channel %s with client ID %s", msg.User, msg.Client, sub.Channel()))
-		return nil
-	}
-
-	events := &centrifuge.SubEventHandler{
+	subEvents := &centrifuge.SubEventHandler{
 		OnMessage: onMessage,
-		OnJoin:    onJoin,
-		OnLeave:   onLeave,
 	}
 
-	sub, err := c.Subscribe(*channelPtr, events)
+	sub, err := c.Subscribe(Config.channelName, subEvents)
 	if err != nil {
-		log.Fatalln(fmt.Sprintf("Failed to subscribe: %s", err.Error()))
+		log.Fatalln(fmt.Sprintf("Failed to subscribe to channel %s: %s", Config.channelName, err.Error()))
 	}
 
-	history, err := sub.History()
+	msgs, err := sub.History()
 	if err != nil {
-		log.Fatalln(fmt.Sprintf("Failed to get history: %s", err.Error()))
+		log.Fatalln(fmt.Sprintf("Error retreiving channel history: %s", err.Error()))
+	} else {
+		log.Printf("%d messages in channel history", len(msgs))
 	}
-	log.Printf("%d messages in channel %s history", len(history), sub.Channel())
+}
 
-	presence, err := sub.Presence()
-	if err != nil {
-		log.Fatalln(fmt.Sprintf("Failed to get presence: %s", err.Error()))
+
+func main() {
+	started := time.Now()
+
+	parseFlags()
+
+	for i := 0; i < int(Config.clientsCount); i++ {
+		time.Sleep(time.Millisecond * 10)
+		newConnection()
 	}
-	log.Printf("%d clients in channel %s", len(presence), sub.Channel())
 
-	err = sub.Unsubscribe()
-	if err != nil {
-		log.Fatalln(fmt.Sprintf("Failed to unsubscribe: %s", err.Error()))
+	var prevMsgReceived int32 = 0
+
+	for {
+		time.Sleep(time.Second)
+		currMsgReceived := atomic.LoadInt32(&msgReceived)
+		log.Printf(
+			"Messages received: %d total,\t%d per second,\t%d per client per second",
+			currMsgReceived,
+			currMsgReceived - prevMsgReceived,
+			int(float32(currMsgReceived - prevMsgReceived) / float32(Config.clientsCount)))
+		prevMsgReceived = currMsgReceived
 	}
 
 	log.Printf("%s", time.Since(started))
