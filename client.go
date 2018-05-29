@@ -6,11 +6,12 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"runtime"
+	"sync/atomic"
 	"time"
 
 	"github.com/centrifugal/centrifuge-go"
 	"github.com/centrifugal/centrifugo/libcentrifugo/auth"
-	"sync/atomic"
 )
 
 type config struct {
@@ -109,6 +110,8 @@ func main() {
 	started := time.Now()
 
 	parseFlags()
+
+	runtime.GOMAXPROCS(runtime.NumCPU()) // just to be sure :)
 
 	for i := 0; i < int(Config.clientsCount); i++ {
 		time.Sleep(time.Millisecond * 10)
