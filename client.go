@@ -12,6 +12,7 @@ import (
 
 	"github.com/centrifugal/centrifuge-go"
 	"github.com/centrifugal/centrifugo/libcentrifugo/auth"
+	"strconv"
 )
 
 type config struct {
@@ -35,9 +36,9 @@ func parseFlags () {
 	flag.Parse()
 }
 
-func credentials() *centrifuge.Credentials {
-	// Application user ID.
-	user := "42"
+func credentials(user int) *centrifuge.Credentials {
+	// User ID
+	user_str := strconv.Itoa(user)
 
 	// Current timestamp as string.
 	timestamp := centrifuge.Timestamp()
@@ -46,18 +47,18 @@ func credentials() *centrifuge.Credentials {
 	info := ""
 
 	// Generate client token so Centrifugo server can trust connection parameters received from client.
-	token := auth.GenerateClientToken(Config.secret, user, timestamp, info)
+	token := auth.GenerateClientToken(Config.secret, user_str, timestamp, info)
 
 	return &centrifuge.Credentials{
-		User:      user,
+		User:      user_str,
 		Timestamp: timestamp,
 		Info:      info,
 		Token:     token,
 	}
 }
 
-func newConnection() {
-	creds := credentials()
+func newConnection(user int) {
+	creds := credentials(user)
 
 	events := &centrifuge.EventHandler{
 		OnDisconnect: func(c centrifuge.Centrifuge) error {
@@ -115,7 +116,7 @@ func main() {
 
 	for i := 0; i < int(Config.clientsCount); i++ {
 		time.Sleep(time.Millisecond * 10)
-		newConnection()
+		newConnection(i)
 	}
 
 	var prevMsgReceived int32 = 0
