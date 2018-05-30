@@ -26,6 +26,7 @@ type config struct {
 var Config config
 
 var msgReceived int32 = 0
+var clientsConnected int32 = 0
 
 func parseFlags () {
 	flag.StringVar(&Config.secret, "secret", "", "Secret.")
@@ -65,7 +66,8 @@ func newConnection(user int) {
 			log.Println("Disconnected")
 			err := c.Reconnect(centrifuge.DefaultBackoffReconnect)
 			if err != nil {
-				log.Fatalln(fmt.Sprintf("Failed to reconnect: %s", err.Error()))
+				log.Println(fmt.Sprintf("Failed to reconnect: %s", err.Error()))
+				atomic.AddInt32(&clientsConnected, -1)
 			} else {
 				log.Println("Reconnected")
 			}
@@ -83,8 +85,9 @@ func newConnection(user int) {
 		log.Fatalln(fmt.Sprintf("Failed to connect: %s", err.Error()))
 	}
 
+	atomic.AddInt32(&clientsConnected, 1)
+
 	onMessage := func(sub centrifuge.Sub, msg centrifuge.Message) error {
-		//log.Println(fmt.Sprintf("New message received in channel %s: %#v", Config.channelName, msg))
 		atomic.AddInt32(&msgReceived, 1)
 		return nil
 	}
@@ -124,11 +127,13 @@ func main() {
 	for {
 		time.Sleep(time.Second)
 		currMsgReceived := atomic.LoadInt32(&msgReceived)
+		currClientsConnected := atomic.LoadInt32(&clientsConnected)
 		log.Printf(
-			"Messages received: %d total,\t%d per second,\t%d per client per second",
+			"Messages received: %d total,\t%d per second,\t%d per client per second,\t%d clients connected",
 			currMsgReceived,
 			currMsgReceived - prevMsgReceived,
-			int(float32(currMsgReceived - prevMsgReceived) / float32(Config.clientsCount)))
+			int(float32(currMsgReceived - prevMsgReceived) / float32(Config.clientsCount)),
+			currClientsConnected)
 		prevMsgReceived = currMsgReceived
 	}
 
