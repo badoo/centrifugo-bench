@@ -39,6 +39,7 @@ func parseFlags () {
 }
 
 func generateChannelsNames() {
+	channels = make(map[int]string)
 	if Config.channels == 1 {
 		channels[0] = "bench"
 	} else {
