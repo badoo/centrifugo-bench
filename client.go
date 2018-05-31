@@ -16,14 +16,15 @@ import (
 )
 
 type config struct {
-	secret       string
-	wsUrl        string
-	channelName  string
-	clientsCount uint
-
+	secret            string
+	wsUrl             string
+	channels          uint
+	clientsPerChannel uint
 }
 
 var Config config
+
+var channels map[int]string
 
 var msgReceived int32 = 0
 var clientsConnected int32 = 0
@@ -31,10 +32,20 @@ var clientsConnected int32 = 0
 func parseFlags () {
 	flag.StringVar(&Config.secret, "secret", "", "Secret.")
 	flag.StringVar(&Config.wsUrl, "url", "", "WS URL, e.g.: ws://localhost:8000/connection/websocket.")
-	flag.StringVar(&Config.channelName, "channel", "test", "Channel name.")
-	flag.UintVar(&Config.clientsCount, "clients", 1, "Clients count.")
+	flag.UintVar(&Config.channels, "channels", 1, "Channels count.")
+	flag.UintVar(&Config.clientsPerChannel, "clients-per-channel", 1, "Clients per channel count.")
 
 	flag.Parse()
+}
+
+func generateChannelsNames() {
+	if Config.channels == 1 {
+		channels[0] = "bench"
+	} else {
+		for i := 0; i < int(Config.channels); i++ {
+			channels[i] = fmt.Sprintf("bench%d", i)
+		}
+	}
 }
 
 func credentials(user int) *centrifuge.Credentials {
@@ -58,8 +69,8 @@ func credentials(user int) *centrifuge.Credentials {
 	}
 }
 
-func newConnection(user int) {
-	creds := credentials(user)
+func newConnection(channel int, client int) {
+	creds := credentials(channel * int(Config.clientsPerChannel) + client)
 
 	events := &centrifuge.EventHandler{
 		OnDisconnect: func(c centrifuge.Centrifuge) error {
@@ -96,9 +107,9 @@ func newConnection(user int) {
 		OnMessage: onMessage,
 	}
 
-	sub, err := c.Subscribe(Config.channelName, subEvents)
+	sub, err := c.Subscribe(channels[channel], subEvents)
 	if err != nil {
-		log.Fatalln(fmt.Sprintf("Failed to subscribe to channel %s: %s", Config.channelName, err.Error()))
+		log.Fatalln(fmt.Sprintf("Failed to subscribe to channel %s: %s", channels[channel], err.Error()))
 	}
 
 	msgs, err := sub.History()
@@ -116,11 +127,15 @@ func main() {
 
 	parseFlags()
 
+	generateChannelsNames()
+
 	runtime.GOMAXPROCS(runtime.NumCPU()) // just to be sure :)
 
-	for i := 0; i < int(Config.clientsCount); i++ {
-		time.Sleep(time.Millisecond * 10)
-		newConnection(i)
+	for i := 0; i < int(Config.channels); i++ {
+		for j := 0; j < int(Config.clientsPerChannel); j++ {
+			time.Sleep(time.Millisecond * 10)
+			newConnection(i, j)
+		}
 	}
 
 	var prevMsgReceived int32 = 0
@@ -133,7 +148,7 @@ func main() {
 			"Messages received: %d total,\t%d per second,\t%d per client per second,\t%d clients connected",
 			currMsgReceived,
 			currMsgReceived - prevMsgReceived,
-			int(float32(currMsgReceived - prevMsgReceived) / float32(Config.clientsCount)),
+			int(float32(currMsgReceived - prevMsgReceived) / float32(Config.clientsPerChannel)),
 			currClientsConnected)
 		prevMsgReceived = currMsgReceived
 	}
