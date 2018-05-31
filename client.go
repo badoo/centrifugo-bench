@@ -98,13 +98,11 @@ func newConnection(channel int, client int) {
 
 	atomic.AddInt64(&clientsConnected, 1)
 
-	onMessage := func(sub centrifuge.Sub, msg centrifuge.Message) error {
-		atomic.AddInt64(&msgReceived, 1)
-		return nil
-	}
-
 	subEvents := &centrifuge.SubEventHandler{
-		OnMessage: onMessage,
+		OnMessage: func(sub centrifuge.Sub, msg centrifuge.Message) error {
+			atomic.AddInt64(&msgReceived, 1)
+			return nil
+		},
 	}
 
 	sub, err := c.Subscribe(channels[channel], subEvents)
