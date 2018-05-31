@@ -26,8 +26,8 @@ var Config config
 
 var channels map[int]string
 
-var msgReceived int32 = 0
-var clientsConnected int32 = 0
+var msgReceived int64 = 0
+var clientsConnected int64 = 0
 
 func parseFlags () {
 	flag.StringVar(&Config.secret, "secret", "", "Secret.")
@@ -78,7 +78,7 @@ func newConnection(channel int, client int) {
 			err := c.Reconnect(centrifuge.DefaultBackoffReconnect)
 			if err != nil {
 				log.Println(fmt.Sprintf("Failed to reconnect: %s", err.Error()))
-				atomic.AddInt32(&clientsConnected, -1)
+				atomic.AddInt64(&clientsConnected, -1)
 			} else {
 				log.Println("Reconnected")
 			}
@@ -96,10 +96,10 @@ func newConnection(channel int, client int) {
 		log.Fatalln(fmt.Sprintf("Failed to connect: %s", err.Error()))
 	}
 
-	atomic.AddInt32(&clientsConnected, 1)
+	atomic.AddInt64(&clientsConnected, 1)
 
 	onMessage := func(sub centrifuge.Sub, msg centrifuge.Message) error {
-		atomic.AddInt32(&msgReceived, 1)
+		atomic.AddInt64(&msgReceived, 1)
 		return nil
 	}
 
@@ -116,7 +116,7 @@ func newConnection(channel int, client int) {
 	if err != nil {
 		log.Fatalln(fmt.Sprintf("Error retreiving channel history: %s", err.Error()))
 	} else {
-		currClientsConnected := atomic.LoadInt32(&clientsConnected)
+		currClientsConnected := atomic.LoadInt64(&clientsConnected)
 		log.Printf("%d messages in channel history, %d clients connected", len(msgs), currClientsConnected)
 	}
 }
@@ -138,12 +138,12 @@ func main() {
 		}
 	}
 
-	var prevMsgReceived int32 = 0
+	var prevMsgReceived int64 = 0
 
 	for {
 		time.Sleep(time.Second)
-		currMsgReceived := atomic.LoadInt32(&msgReceived)
-		currClientsConnected := atomic.LoadInt32(&clientsConnected)
+		currMsgReceived := atomic.LoadInt64(&msgReceived)
+		currClientsConnected := atomic.LoadInt64(&clientsConnected)
 		log.Printf(
 			"Messages received: %d total,\t%d per second,\t%d per client per second,\t%d clients connected",
 			currMsgReceived,
