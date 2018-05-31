@@ -105,7 +105,8 @@ func newConnection(user int) {
 	if err != nil {
 		log.Fatalln(fmt.Sprintf("Error retreiving channel history: %s", err.Error()))
 	} else {
-		log.Printf("%d messages in channel history", len(msgs))
+		currClientsConnected := atomic.LoadInt32(&clientsConnected)
+		log.Printf("%d messages in channel history, %d clients connected", len(msgs), currClientsConnected)
 	}
 }
 
