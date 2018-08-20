@@ -3,7 +3,7 @@
 ## Installation
 
 ```
-go install -u github.com/badoo/centrifugo-bench
+go get -u github.com/badoo/centrifugo-bench
 ```
 
 ## Usage
