@@ -248,6 +248,8 @@ func rawRequest(method string, params interface{}) (body string, err error)  {
 		return "", err
 	}
 
+	defer resp.Body.Close()
+
 	bodyBytes, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		return "", err
