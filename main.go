@@ -28,10 +28,12 @@ var SafeClient = &http.Client{
 }
 
 type config struct {
-	secret            string
-	wsUrl             string
-	channels          uint
-	clientsPerChannel uint
+	secret                string
+	wsUrl                 string
+	channels              uint
+	clientsPerChannel     uint
+	connectionConcurrency uint
+	channelRps            uint
 }
 
 type publishMessage struct {
@@ -61,11 +63,15 @@ var tasks chan string
 var createConnection chan connectionParams
 var requestsTable map[int] int
 
+var startTime time.Time
+
 func parseFlags () {
 	flag.StringVar(&Config.secret, "secret", "", "Secret.")
 	flag.StringVar(&Config.wsUrl, "url", "", "WS URL, e.g.: ws://localhost:8000/connection/websocket.")
 	flag.UintVar(&Config.channels, "channels", 1, "Channels count.")
 	flag.UintVar(&Config.clientsPerChannel, "clients-per-channel", 1, "Clients per channel count.")
+	flag.UintVar(&Config.connectionConcurrency, "connection-concurrency", 10, "Max concurrency for establishing connections")
+	flag.UintVar(&Config.channelRps, "channel-rps", 1, "Message per second for channel")
 
 	flag.Parse()
 }
@@ -189,7 +195,7 @@ func createConnectionsPool() {
 
 	close(createConnection)
 
-	numWorkers := 100
+	numWorkers := int(Config.connectionConcurrency)
 	if numWorkers > totalConnections {
 		numWorkers = totalConnections
 	}
@@ -250,8 +256,8 @@ func rawRequest(method string, params interface{}) (body string, err error)  {
 }
 
 func sendMessage(channel string) {
-	// jitter
-	time.Sleep(time.Duration(rand.Intn(500)) * time.Millisecond)
+	jitter := time.Duration(rand.Intn(500)) * time.Millisecond
+	time.Sleep(jitter)
 
 	publishMsg := &publishMessage{
 		Channel: channel,
@@ -259,7 +265,7 @@ func sendMessage(channel string) {
 	}
 	_, err := rawRequest("publish", publishMsg)
 	if err != nil {
-		log.Println("Failed to send message to channel")
+		log.Printf("Failed to send message to channel: %s\n", err.Error())
 	}
 }
 
@@ -281,8 +287,13 @@ func sendMessageLoop(t *time.Ticker) {
 		select {
 		case <-quitSignal:
 		case <-t.C:
-			for _, channel := range channels {
-				tasks <- channel
+			if len(tasks) > 0 {
+				log.Fatalf("Send message queue overflow: %d", len(tasks))
+			}
+			for i := 0; i < int(Config.channelRps); i++ {
+				for _, channel := range channels {
+					tasks <- channel
+				}
 			}
 			atomic.AddInt64(&msgSent, int64(Config.channels))
 			continue
@@ -292,11 +303,13 @@ func sendMessageLoop(t *time.Ticker) {
 }
 
 func startMessagesSending() {
-	tasks = make(chan string, Config.channels)
+	sendMessageWorkers := int(Config.channels * Config.channelRps)
+	tasks = make(chan string, sendMessageWorkers)
+
 	ticker := time.NewTicker(time.Second)
 	go sendMessageLoop(ticker)
 
-	for i := 0; i < int(Config.channels); i++ {
+	for i := 0; i < sendMessageWorkers; i++ {
 		go sendMessageWorker()
 	}
 }
@@ -356,7 +369,21 @@ func printStats() {
 	currentTime := keys[currentKey]
 	currentCount := requestsTable[currentTime]
 
-	fmt.Printf("\n\ntotalRequests:%d\n-----------------------------\n", totalRequests / 100)
+	totalTime := time.Since(startTime)
+	avgRps := float64(totalRequests) / 100 / totalTime.Seconds()
+	rpsPerClient := avgRps / float64(Config.clientsPerChannel)
+
+	fmt.Print("\n\n")
+	fmt.Printf("Channels:\t%d\n", Config.channels)
+	fmt.Printf("Clients per Channel:\t%d\n", Config.clientsPerChannel)
+	fmt.Printf("RPS per Channel:\t%d\n", Config.channelRps)
+	fmt.Println("-----------------------------")
+	fmt.Printf("Total time:\t%s\n", totalTime.Round(time.Second))
+	fmt.Printf("Total Requests:\t%d\n", totalRequests / 100)
+	fmt.Printf("Avg RPS:\t%.2f\n", avgRps)
+	fmt.Printf("Per Client RPS:\t%.2f\n", rpsPerClient)
+
+	fmt.Println("-----------------------------")
 
 	for {
 		if percentile > 100 {
@@ -399,6 +426,8 @@ func main() {
 	generateChannelsNames()
 
 	createConnectionsPool()
+
+	startTime = time.Now()
 	go collectStats()
 
 	startMessagesSending()
