@@ -87,7 +87,7 @@ func generateChannelsNames() {
 	}
 }
 
-func credentials(user int) *centrifuge.Credentials {
+func generateCredentials(user int) *centrifuge.Credentials {
 	// User ID
 	userStr := strconv.Itoa(user)
 
@@ -109,7 +109,7 @@ func credentials(user int) *centrifuge.Credentials {
 }
 
 func newConnection(channel int, client int) {
-	creds := credentials(channel * int(Config.clientsPerChannel) + client)
+	credentials := generateCredentials(channel * int(Config.clientsPerChannel) + client)
 
 	var backoffReconnect = &centrifuge.BackoffReconnect{
 		NumReconnect: 5,
@@ -136,7 +136,7 @@ func newConnection(channel int, client int) {
 	conf := centrifuge.DefaultConfig
 	conf.Timeout = 10 * time.Second
 
-	c := centrifuge.NewCentrifuge(Config.wsUrl, creds, events, conf)
+	c := centrifuge.NewCentrifuge(Config.wsUrl, credentials, events, conf)
 
 	err := c.Reconnect(backoffReconnect)
 	if err != nil {
