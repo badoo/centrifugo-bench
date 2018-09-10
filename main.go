@@ -380,7 +380,7 @@ func printStats() {
 	fmt.Printf("Clients per Channel:\t%d\n", Config.clientsPerChannel)
 	fmt.Printf("RPS per Channel:\t%d\n", Config.channelRps)
 	fmt.Println("-----------------------------")
-	fmt.Printf("Total time:\t%s\n", totalTime.Round(time.Second))
+	fmt.Printf("Total time:\t%d\n", int32(totalTime / time.Second))
 	fmt.Printf("Total Requests:\t%d\n", totalRequests / 100)
 	fmt.Printf("Avg RPS:\t%.2f\n", avgRps)
 	fmt.Printf("Per Client RPS:\t%.2f\n", rpsPerClient)
