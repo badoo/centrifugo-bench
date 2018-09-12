@@ -35,7 +35,6 @@ func subscribeRun (cmd *cobra.Command, args []string) {
 
 	for i := 0; i < int(RootConfig.channels); i++ {
 		for j := 0; j < int(RootConfig.connectionsPerChannel); j++ {
-			time.Sleep(time.Millisecond)
 			CreateNewSubscribeConnection(i, j)
 		}
 	}
@@ -129,7 +128,7 @@ func CreateNewSubscribeConnection(channel int, client int) {
 	if err != nil {
 		log.Fatalln(fmt.Sprintf("Error retreiving channel history: %s", err.Error()))
 	} else {
-		log.Printf("Connection established: client #%d connected (%d messages in channel history)", user, len(msgs))
+		log.Printf("Subscriber connection established: channel #%d, client #%d (user %d) (%d messages in channel history)", channel + 1, client + 1, user, len(msgs))
 	}
 }
 

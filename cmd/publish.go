@@ -20,6 +20,7 @@ import (
 
 type publishConfig struct {
 	messagesPerSecondPerConnectionPerChannel uint
+	payloadSize uint
 }
 
 var PublishConfig publishConfig
@@ -33,11 +34,14 @@ var publishCmd = &cobra.Command{
 
 func init() {
 	publishCmd.Flags().UintVar(&PublishConfig.messagesPerSecondPerConnectionPerChannel, "mps", 1, "Message per second per connection per channel")
+	publishCmd.Flags().UintVar(&PublishConfig.payloadSize, "payload-size", 128, "Message payload size in bytes")
 
 	rootCmd.AddCommand(publishCmd)
 }
 
 func publishRun (cmd *cobra.Command, args []string) {
+	log.Printf("PublishConfig: %+v", PublishConfig)
+
 	log.Printf("Publishing")
 
 	for i := 0; i < int(RootConfig.channels); i++ {
@@ -80,6 +84,8 @@ func CreateNewPublishConnection(channel int, client int) {
 			break
 		}
 	}(channel, client)
+
+	log.Printf("Publisher created: channel #%d, client #%d", channel + 1, client + 1)
 }
 
 type publishMessage struct {
@@ -87,10 +93,24 @@ type publishMessage struct {
 	Data      interface{} `json:"data"`
 }
 
+const letters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+var payload string;
+
+func GetPayload() string {
+	if len(payload) == 0 {
+		b := make([]byte, PublishConfig.payloadSize)
+		for i := range b {
+			b[i] = letters[rand.Intn(len(letters))]
+		}
+		payload = string(b)
+	}
+	return payload
+}
+
 func PublishMessage(channel string) {
 	benchMsg := &benchMessage{
 		Time: time.Now(),
-		Payload: "payload",
+		Payload: GetPayload(),
 	}
 
 	publishMsg := &publishMessage{
