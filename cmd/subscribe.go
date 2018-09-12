@@ -106,7 +106,7 @@ func CreateNewSubscribeConnection(channel int, client int) {
 			var BenchMessage benchMessage
 			err := json.Unmarshal(*msg.Data, &BenchMessage)
 			if err != nil {
-				log.Println(fmt.Sprintf("Failed to unmarshal message '%s': %+v", string(msg.Data[:]), err))
+				log.Println(fmt.Sprintf("Failed to unmarshal message '%s': %+v", string(*msg.Data), err))
 				return nil
 			}
 
