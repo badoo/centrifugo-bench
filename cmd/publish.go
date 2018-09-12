@@ -70,10 +70,11 @@ func CreateNewPublishConnection(channel int, client int) {
 	go func(channel int, client int, ticker *time.Ticker) {
 		for {
 			select {
-			case <-quitSignal:
 			case <-ticker.C:
 				PublishMessage(channels[channel])
 				continue
+			case <-quitSignal:
+				return
 			}
 			break
 		}
@@ -149,7 +150,6 @@ func PrintPublisherRealTimeStat() {
 	var prevMessagesPublished int64 = 0
 	for {
 		select {
-		case <-quitSignal:
 		case <-statTicker.C:
 			currMessagesPublished := atomic.LoadInt64(&messagesPublished)
 			log.Printf(
@@ -159,12 +159,14 @@ func PrintPublisherRealTimeStat() {
 				int(float32(currMessagesPublished-prevMessagesPublished) / float32(RootConfig.channels)))
 			prevMessagesPublished = currMessagesPublished
 			continue
+		case <-quitSignal:
+			return
 		}
 		break
 	}
 }
 
 func PrintPublisherTotalStats() {
-	time.Sleep(time.Second)
+	time.Sleep(time.Millisecond * 100)
 	os.Exit(0)
 }

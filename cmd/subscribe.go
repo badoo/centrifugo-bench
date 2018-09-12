@@ -162,10 +162,11 @@ func CollectDeliveryTime() {
 
 	for {
 		select {
-		case <-quitSignal:
 		case deliveryTime = <- deliveryTimeChannel:
 			deliveryTimeMap[deliveryTime]++
 			continue
+		case <-quitSignal:
+			return
 		}
 		break
 	}
@@ -176,7 +177,6 @@ func PrintSubscriberRealTimeStat() {
 	var prevMessagesReceived int64 = 0
 	for {
 		select {
-		case <-quitSignal:
 		case <-statTicker.C:
 			currMessagesReceived := atomic.LoadInt64(&messagesReceived)
 			currClientsConnected := atomic.LoadInt64(&subscribeConnectionsEstablished)
@@ -188,6 +188,8 @@ func PrintSubscriberRealTimeStat() {
 				currClientsConnected)
 			prevMessagesReceived = currMessagesReceived
 			continue
+		case <-quitSignal:
+			return
 		}
 		break
 	}
@@ -230,6 +232,6 @@ func PrintSubscriberTotalStats() {
 		currentCount += deliveryTimeMap[currentTime]
 	}
 
-	time.Sleep(time.Second)
+	time.Sleep(time.Millisecond * 100)
 	os.Exit(0)
 }
