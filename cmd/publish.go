@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
+	"math/rand"
+	"net/http"
 	"net/url"
 	"os"
 	"os/signal"
@@ -14,7 +16,6 @@ import (
 
 	"github.com/centrifugal/centrifugo/libcentrifugo/auth"
 	"github.com/spf13/cobra"
-	"net/http"
 )
 
 type publishConfig struct {
@@ -41,7 +42,6 @@ func publishRun (cmd *cobra.Command, args []string) {
 
 	for i := 0; i < int(RootConfig.channels); i++ {
 		for j := 0; j < int(RootConfig.connectionsPerChannel); j++ {
-			time.Sleep(time.Millisecond)
 			CreateNewPublishConnection(i, j)
 		}
 	}
@@ -66,8 +66,9 @@ func publishRun (cmd *cobra.Command, args []string) {
 var messagesPublished int64 = 0
 
 func CreateNewPublishConnection(channel int, client int) {
-	ticker := time.NewTicker(time.Duration(uint(time.Second) / PublishConfig.messagesPerSecondPerConnectionPerChannel))
-	go func(channel int, client int, ticker *time.Ticker) {
+	go func(channel int, client int) {
+		time.Sleep(time.Duration(rand.Intn(1000)) * time.Millisecond)
+		ticker := time.NewTicker(time.Duration(uint(time.Second) / PublishConfig.messagesPerSecondPerConnectionPerChannel))
 		for {
 			select {
 			case <-ticker.C:
@@ -78,7 +79,7 @@ func CreateNewPublishConnection(channel int, client int) {
 			}
 			break
 		}
-	}(channel, client, ticker)
+	}(channel, client)
 }
 
 type publishMessage struct {
