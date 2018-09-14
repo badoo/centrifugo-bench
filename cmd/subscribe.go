@@ -119,17 +119,12 @@ func CreateNewSubscribeConnection(channel int, client int) {
 		},
 	}
 
-	sub, err := c.Subscribe(channels[channel], subEvents)
+	_, err = c.Subscribe(channels[channel], subEvents)
 	if err != nil {
 		log.Fatalln(fmt.Sprintf("Failed to subscribe to channel %s: %s", channels[channel], err.Error()))
 	}
 
-	msgs, err := sub.History()
-	if err != nil {
-		log.Fatalln(fmt.Sprintf("Error retreiving channel history: %s", err.Error()))
-	} else {
-		log.Printf("Subscriber connection established: channel #%d, client #%d (user %d) (%d messages in channel history)", channel + 1, client + 1, user, len(msgs))
-	}
+	log.Printf("Subscriber connection established: channel #%d, client #%d (user %d)", channel + 1, client + 1, user)
 }
 
 func GenerateSubscribeCredentials(user int) *centrifuge.Credentials {
